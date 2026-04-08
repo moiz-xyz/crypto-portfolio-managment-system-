@@ -2,34 +2,49 @@ import axios from "axios";
 import { getIO } from "./socket.js";
 import "dotenv/config";
 
-export const startPriceEngine = () => {
-  console.log("⚙️ Price Engine Started...");
-  setInterval(async () => {
-    try {
-      // 🚀 Changed to 'markets' endpoint to get 50+ coins automatically
-      const { data } = await axios.get(
-        "https://api.coingecko.com/api/v3/coins/markets",
-        {
-          params: {
-            vs_currency: "usd",
-            order: "market_cap_desc",
-            per_page: 50, // Gets the top 50 coins!
-            page: 1,
-            sparkline: false,
-          },
-          headers: {
-            Accept: "application/json",
-            "x-cg-demo-api-key": process.env.COINGECKO_API_KEY,
-          },
-        }
-      );
+let lastPrices = null;
 
-      // We emit the whole array now because it contains images and names!
-      const io = getIO();
+const fetchPrices = async () => {
+  try {
+    const { data } = await axios.get(
+      "https://api.coingecko.com/api/v3/coins/markets",
+      {
+        params: {
+          vs_currency: "usd",
+          order: "market_cap_desc",
+          per_page: 50,
+          page: 1,
+          sparkline: false,
+        },
+        headers: {
+          Accept: "application/json",
+          "x-cg-demo-api-key": process.env.COINGECKO_API_KEY,
+        },
+      }
+    );
+
+    lastPrices = data;
+    const io = getIO();
+    if (io) {
       io.emit("price-update-full", data);
-      console.log("Broadcasted top 50 coins with metadata");
-    } catch (error) {
-      console.error("❌ Engine Error:", error.message);
+      console.log(
+        `✅ Broadcasted ${
+          data.length
+        } coins at ${new Date().toLocaleTimeString()}`
+      );
     }
-  }, 30000);
+  } catch (error) {
+    console.error("❌ Price Engine Error:", error.message);
+  }
 };
+
+export const startPriceEngine = () => {
+  console.log("⚙️ Price Engine Initialized...");
+
+  fetchPrices();
+
+  setInterval(fetchPrices, 30000);
+};
+
+// Optional: Export a getter for the socket to use on new connections
+export const getLastPrices = () => lastPrices;

@@ -183,8 +183,9 @@ const Dashboard = ({
     </div>
   ) : (
     <Form
-      title={action === "add" ? "Add New Asset" : "Update Asset"}
-      buttonText={action === "add" ? "Add to Portfolio" : "Update"}
+      title={action === "add" ? "Add Asset" : "Sell Asset"}
+      buttonText={action === "add" ? "Add to Portfolio" : "Confirm Sale"}
+      initialQuantity={portfolio[coinData?.id]?.coins || 0}
       coinData={coinData}
       toggleForm={toggleForm}
       action={action === "add" ? addCoin : removeCoin}

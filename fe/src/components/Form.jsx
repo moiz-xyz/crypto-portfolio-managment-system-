@@ -1,21 +1,24 @@
 import CloseIcon from "@mui/icons-material/Close";
 import { useState } from "react";
-// import { useCurrency } from "../context/CurrencyContext";
+import { useCurrency } from "../context/CurrencyContext";
 
 const Form = ({
   title,
   buttonText,
+  initialQuantity, // 🚀 Added this prop
   coinData,
   toggleForm,
   action,
   portfolio,
 }) => {
-  // const { formatCurrency, currency } = useCurrency();
+  const { formatCurrency, currency } = useCurrency();
   const [amount, setAmount] = useState(0);
   const [price, setPrice] = useState(
     (coinData.current_price * currency[1]).toFixed(2)
   );
-  const isSelling = buttonText === "Remove";
+
+  // 🛠️ Updated to match your new "Confirm Sale" button text
+  const isSelling = buttonText === "Confirm Sale";
   const [warning, setWarning] = useState(null);
 
   return (
@@ -30,6 +33,17 @@ const Form = ({
             <CloseIcon />
           </div>
         </div>
+
+        {/* 📊 Balance Indicator: Shows what you currently own */}
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-slate-700 rounded-lg flex justify-between items-center">
+          <p className="text-xs font-bold text-blue-600 dark:text-blue-300">
+            CURRENT HOLDINGS:
+          </p>
+          <p className="font-mono font-bold text-blue-800 dark:text-blue-100">
+            {initialQuantity || 0} {coinData.symbol.toUpperCase()}
+          </p>
+        </div>
+
         <div className="flex items-center gap-4">
           <img
             src={coinData.image}
@@ -40,10 +54,11 @@ const Form = ({
             <h2 className="font-medium">{coinData.name}</h2>
             <p className="uppercase text-xs">{coinData.symbol}</p>
             <p className="text-xs">
-              Price: {formatCurrency(coinData.current_price * currency[1])}
+              Live Price: {formatCurrency(coinData.current_price * currency[1])}
             </p>
           </div>
         </div>
+
         <form className="my-6">
           <div className="flex flex-col mb-3">
             <span>
@@ -53,95 +68,82 @@ const Form = ({
               type="text"
               value={amount}
               onChange={(e) => {
-                if (warning) {
-                  setWarning(null);
-                }
+                if (warning) setWarning(null);
                 const inputValue = e.target.value;
-                const regex = /^[0-9.]*$/;
-                if (regex.test(inputValue)) {
-                  setAmount(inputValue);
-                }
+                if (/^[0-9.]*$/.test(inputValue)) setAmount(inputValue);
               }}
-              className="border px-2 py-2.5 rounded-md"
-              placeholder="Amount"
+              className="border px-2 py-2.5 rounded-md dark:bg-gray-700 dark:border-gray-600"
+              placeholder="0.00"
             />
           </div>
+
           <div className="flex flex-col mb-5">
             <span>
               {isSelling
-                ? `Sell Price(${currency[0]}) `
-                : `Buy Price(${currency[0]}) `}
+                ? `Sell Price (${currency[0]})`
+                : `Buy Price (${currency[0]})`}
               <span className="text-red-500">*</span>
             </span>
             <input
               type="text"
               value={price}
               onChange={(e) => {
-                if (warning) {
-                  setWarning(null);
-                }
+                if (warning) setWarning(null);
                 const inputValue = e.target.value;
-                const regex = /^[0-9.]*$/;
-                if (regex.test(inputValue)) {
-                  setPrice(inputValue);
-                }
+                if (/^[0-9.]*$/.test(inputValue)) setPrice(inputValue);
               }}
-              className="border px-2 py-2.5 rounded-md"
-              placeholder="Price"
+              className="border px-2 py-2.5 rounded-md dark:bg-gray-700 dark:border-gray-600"
+              placeholder="0.00"
             />
           </div>
-          <p className="text-wrap text-center">
+
+          <p className="text-wrap text-center font-medium">
             {Number.isNaN(Number(amount) * Number(price)) ? (
-              <span className="text-red-500 text-center">
-                Amount And Price can only be a Number
-              </span>
+              <span className="text-red-500">Invalid numbers</span>
             ) : !warning ? (
               `${
                 isSelling ? "Total Sale Value" : "Total Investment"
               }: ${formatCurrency(Number(amount) * Number(price))}`
             ) : (
-              <span className="text-red-500 text-center text-wrap break-words">
-                {warning}
-              </span>
+              <span className="text-red-500 text-sm">{warning}</span>
             )}
           </p>
         </form>
+
         <button
-          className="bg-blue-600 w-full text-white py-3 rounded-md hover:bg-blue-700 cursor-pointer"
+          className={`${
+            isSelling
+              ? "bg-red-600 hover:bg-red-700"
+              : "bg-blue-600 hover:bg-blue-700"
+          } w-full text-white py-3 rounded-md transition-colors font-bold`}
           onClick={() => {
-            if (!amount || amount == 0) {
-              setWarning(`Amount cannot be empty or zero.`);
+            const numAmount = Number(amount);
+            const numPrice = Number(price);
+
+            if (!numAmount || numAmount <= 0) {
+              setWarning("Please enter a valid amount.");
               return;
             }
 
-            if (!price || price == 0) {
-              setWarning(
-                `${
-                  isSelling ? `Sell price` : `Buy price`
-                } cannot be empty or zero.`
-              );
+            if (!numPrice || numPrice <= 0) {
+              setWarning("Please enter a valid price.");
               return;
             }
 
             if (isSelling) {
-              const coins = portfolio[coinData?.id]?.coins || 0;
-
-              if (Number(amount) > coins) {
+              if (numAmount > (initialQuantity || 0)) {
                 setWarning(
-                  <>
-                    Amount exceeds your owned {coinData.name}.
-                    <br />
-                    You have {coins} coins.
-                  </>
+                  `Insufficient balance. You only have ${initialQuantity} coins.`
                 );
                 return;
               }
             }
 
+            // Normalizing price to USD before sending to backend
             action(
               coinData.id,
-              (Number(amount) * Number(price)) / currency[1],
-              Number(amount)
+              (numAmount * numPrice) / currency[1],
+              numAmount
             );
           }}
         >
