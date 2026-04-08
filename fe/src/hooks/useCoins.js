@@ -1,51 +1,55 @@
 import { useState, useEffect } from "react";
-import { io } from "socket.io-client";
+import { useSocket } from "../context/SocketContext";
 
-const SOCKET_SERVER_URL = "http://localhost:5000";
+export default function useCoins() {
+  const [coins, setCoins] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const socket = useSocket();
 
-export default function useCoins(portfolio) {
-	const [coins, setCoins] = useState([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState(null);
+  useEffect(() => {
+    if (!socket) return;
 
-	useEffect(() => {
-		// 1. Initialize Socket Connection
-		const socket = io(SOCKET_SERVER_URL);
+    // 🛡️ If already connected, we can stop the initial spinner
+    if (socket.connected && coins.length > 0) setLoading(false);
 
-		socket.on("connect", () => {
-			console.log("✅ Connected to Real-time Price Engine");
-			setLoading(false);
-		});
+    const handleFullUpdate = (fullData) => {
+      // Logic check: Ensure fullData is an array
+      if (!Array.isArray(fullData)) {
+        console.error("Received data is not an array:", fullData);
+        return;
+      }
 
-		// 2. Listen for the 'price-update' event from your Backend
-		socket.on("price-update", (livePrices) => {
-			// livePrices looks like: { BTC: 65000, ETH: 3500, ... }
-			
-			setCoins((prevCoins) => {
-				// We map the backend symbols to the structure your UI expects
-				const updatedCoins = Object.keys(livePrices).map((symbol) => {
-					// Find the existing coin data to preserve metadata (name, rank)
-					const existing = prevCoins.find(c => c.symbol.toUpperCase() === symbol);
-					
-					return {
-						id: existing?.id || symbol.toLowerCase(), // mapping symbol to id
-						symbol: symbol.toLowerCase(),
-						name: existing?.name || symbol,
-						current_price: livePrices[symbol], // The live ticking price
-						market_cap_rank: existing?.market_cap_rank || 0
-					};
-				});
-				return updatedCoins;
-			});
-		});
+      const formatted = fullData.map((coin) => ({
+        id: coin.id,
+        symbol: coin.symbol.toLowerCase(),
+        name: coin.name,
+        current_price: coin.current_price,
+        image: coin.image, // 🚀 Uses the official CoinGecko URL
+        market_cap_rank: coin.market_cap_rank,
+        price_change_percentage_24h: coin.price_change_percentage_24h || 0,
+        market_cap: coin.market_cap || 0,
+      }));
 
-		socket.on("connect_error", () => {
-			setError("Failed to connect to price server");
-			setLoading(false);
-		});
+      setCoins(formatted);
+      setLoading(false); // 🔓 This stops the loading state
+    };
 
-		return () => socket.disconnect();
-	}, []);
+    const handleError = () => {
+      setError("Failed to connect to price server");
+      setLoading(false);
+    };
 
-	return { coins, loading, error };
+    // 🟢 Match the event name exactly with your backend emit
+    socket.on("price-update-full", handleFullUpdate);
+    socket.on("connect_error", handleError);
+
+    return () => {
+      // 🔴 Cleanup must match the event name above
+      socket.off("price-update-full", handleFullUpdate);
+      socket.off("connect_error", handleError);
+    };
+  }, [socket, coins.length]); // Added coins.length to dependency to help state transitions
+
+  return { coins, loading, error };
 }
